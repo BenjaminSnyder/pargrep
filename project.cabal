@@ -1,0 +1,43 @@
+cabal-version:      2.4
+name:               pargrep
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+-- The license under which the package is released.
+-- license:
+
+-- The package author(s).
+-- author:
+maintainer:         bs3148@columbia.edu
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files:
+    CHANGELOG.md
+    README.md
+
+executable pgrep
+    main-is:          pargrep.hs
+
+    -- Modules included in this executable, other than Main.
+
+    -- LANGUAGE extensions used by modules in this package.
+    -- other-extensions:
+    build-depends:    base ^>=4.14.3.0, kleene, containers
+    hs-source-dirs:   app
+    default-language: Haskell2010
+
+source-repository-package
+    type: git
+    location: https://github.com/stackbuilders/AhoCorasick.git
+    subdir: AhoCorasick
+    tag: 9a825aef5d19c707d2306befca688a1a72d50bb0

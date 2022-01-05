@@ -1,3 +1,6 @@
+{-# LANGUAGE BinaryLiterals #-}
+{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
 
 import Control.Monad
@@ -8,6 +11,22 @@ import System.Environment
 import System.Exit
 import System.IO
 import Text.Printf
+import System.Posix
+
+import qualified Data.ByteString.Char8 as BS
+
+import Control.Arrow
+import Data.Traversable
+import System.Posix.Files
+import "unix-bytestring" System.Posix.IO.ByteString
+import GHC.Conc (numCapabilities)
+import GHC.Exts
+import Data.Functor
+import Data.Foldable
+import Control.Parallel.Strategies
+
+
+
 
 {-
 main = do
@@ -56,10 +75,10 @@ parse argv = case getOpt Permute flags argv of
                     exitSuccess
         else if PatternFile `elem` args
                 then do 
-                    content <- readFile (head files)
-                    let patterns = lines content
+                    content <- BS.readFile (head files)
+                    let patterns = BS.lines content
                     return (nub (concatMap set args), patterns, tail files)
-             else return (nub (concatMap set args), [head files], tail files)
+             else return (nub (concatMap set args), [BS.pack $ head files], tail files)
 
     (_,_, errs)      -> do
         hPutStrLn stderr (concat errs ++ usageInfo header flags)
@@ -67,6 +86,21 @@ parse argv = case getOpt Permute flags argv of
 
     where header = "Usage: pargrep [-pEn] [pattern] [file ...]"
           set f  = [f]
+
+filesplit :: [BS.ByteString] -> [FilePath] -> IO [(FilePath, [BS.ByteString])]
+filesplit pn paths = for paths $ \fp -> do
+    fd <- openFd fp ReadOnly Nothing defaultFileFlags
+    size <- fromIntegral . fileSize <$> getFileStatus fp
+    putStrLn ("Using available cores: " <> show numCapabilities)
+    let chunkSize = size `div` numCapabilities
+    result <- fold <$!> forConcurrently [0..numCapabilities-1] ( \n -> do
+        -- Adjust for inaccuracies in integer division; don't want to leave any unread bytes
+        let readAmount = fromIntegral $ if n == (numCapabilities - 1)
+                                            then size - (n * chunkSize)
+                                            else chunkSize
+        let offset = fromIntegral (n * chunkSize)
+        grep pn <$!> fdPread fd readAmount offset)
+    closeFd fd $> (fp, result)
 
 {- Actually process the arguments -}
 main :: IO ()
@@ -77,7 +111,13 @@ main = do
     putStrLn $ "Pattern: "++ show pn
     putStrLn $ "Files: " ++ show fs
    
-    content <- readFile $ head fs
-    print content
+    res <- filesplit pn fs
+    print res
 
+grep :: [BS.ByteString] -> BS.ByteString -> [BS.ByteString]
+grep pats input = parMap rpar (\ pat -> let isInfixOf p s = any (BS.isPrefixOf p) $ BS.tails s 
+                 in BS.unlines $ filter (isInfixOf pat) $ BS.lines input) pats
+    
+    
+    
 
